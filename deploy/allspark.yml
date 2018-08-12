@@ -1,0 +1,203 @@
+# Edit NodeIP
+# Edit FRPS-Address
+# Edit External Name (ini-server)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: allspark
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: allspark-clusterrole
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - namespaces
+      - nodes
+    verbs:
+      - list
+      - watch
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - create
+      - patch
+      - update
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "extensions"
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+        - events
+    verbs:
+        - create
+        - patch
+  - apiGroups:
+      - "extensions"
+    resources:
+      - ingresses/status
+    verbs:
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: allspark-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: allspark-clusterrole
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: allspark
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: allspark-public
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - watch
+      - list
+    resourceNames:
+      - ini-server
+      - valhala
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: RoleBinding
+metadata:
+  name: allspark-public
+  namespace: kube-public
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: allspark-public
+subjects:
+- kind: Group
+  name: system:serviceaccounts
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: as-controller
+  namespace: allspark
+spec:
+  selector:
+    matchLabels:
+      app: as-controller
+  template:
+    metadata:
+      labels:
+        app: as-controller
+    spec:
+      containers:
+      - name: as-controller
+        image: quay.io/sandromello/allspark:v0.0.1-rc.2
+        command:
+          - /usr/local/bin/allspark-controller-manager
+          - --public-master-url=<api-server-public-address>
+          - --frps-address=<frps-public-address> # must respond to node-ip address
+          - --image=quay.io/sandromello/allspark:v0.0.1-rc.2
+          - --node-ip=<private-ipv4> # which server to expose frps ports
+          - --logtostderr
+          - --v=2
+        ports:
+        - name: http
+          containerPort: 3500
+          protocol: TCP
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frpc-ini-server
+  namespace: allspark
+spec:
+  selector:
+    app: as-controller
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3500
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ini-server
+  namespace: kube-public
+spec:
+  type: ExternalName
+  externalName: <ini-server-public-address> # respond to frps operator
+  ports:
+    - name: http
+      port: 443
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valhala
+  namespace: kube-public
+spec:
+  type: ExternalName
+  externalName: <frps-public-address>
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ini-server
+  namespace: allspark
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+  - host: <ini-server-public-address>
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: frpc-ini-server
+          servicePort: 80

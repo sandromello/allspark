@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: frpc-kubelet
+  namespace: allspark
+  labels:
+    app: frpc-kubelet
+spec:
+  selector:
+    matchLabels:
+      name: frpc-kubelet
+  template:
+    metadata:
+      labels:
+        name: frpc-kubelet
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/on-prem: ''
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: frpc
+        image: quay.io/sandromello/allspark:v0.0.1-rc.2
+        command:
+          - /usr/local/bin/frpc
+          - -c
+          - /etc/frpc/frpc.ini
+        resources:
+          limits:
+            memory: 200Mi
+            cpu: 200m
+          requests:
+            cpu: 50m
+            memory: 100Mi
+        volumeMounts:
+        - mountPath: /etc/frpc/
+          name: frpc-ini
+          readOnly: true
+      - name: sync
+        image: quay.io/sandromello/allspark:v0.0.1-rc.2
+        command:
+          - /usr/local/bin/ini-sync
+          - --frpc-ini=/etc/frpc/frpc.ini
+          - --sync=Kubelet
+          - --logtostderr
+        resources:
+          limits:
+            memory: 200Mi
+            cpu: 200m
+          requests:
+            cpu: 50m
+            memory: 100Mi
+        env:
+        - name: POD_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: KUBERNETES_SERVICE_HOST
+          value: api.lab.acme.org
+        volumeMounts:
+        - mountPath: /etc/frpc/
+          name: frpc-ini
+      volumes:
+      - name: frpc-ini
+        emptyDir: {}
+      terminationGracePeriodSeconds: 30
