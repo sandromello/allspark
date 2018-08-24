@@ -428,7 +428,7 @@ spec:
 
 - Change the `KUBERNETES_SERVICE_HOST` env to your public api server host
 
-6) Configure your local machine/server (vagrant on your local notebook/desktop)
+7) Configure your local machine/server (vagrant on your local notebook/desktop)
 
 ```bash
 vagrant plugin install vagrant-ignition
@@ -440,7 +440,7 @@ vagrant up
 vagrant ssh
 ```
 
-7) Join your node to master
+8) Join your node to master
 
 ```bash
 # On Master: copy the output of the command
@@ -450,7 +450,7 @@ kubeadm token create --print-join-command
 kubeadm join (...)
 ```
 
-8) Once you have pods running on your local node, try to check the logs in your master using `kubectl`
+9) Once you have pods running on your local node, try to check the logs in your master using `kubectl`
 
 ```bash
 kubectl logs frpc-kubelet -n office -c frpc
@@ -458,7 +458,7 @@ kubectl logs frpc-kubelet -n office -c frpc
 
 > The frpc-kubelet pod must be running in order for this to work!
 
-9) Expose a local app in your vagrant box
+10) Expose a local app in your vagrant box
 
 ```yaml
 apiVersion: apps/v1
